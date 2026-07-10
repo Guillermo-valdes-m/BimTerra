@@ -1,0 +1,201 @@
+// Esquema de base de datos de BIMterra
+// Diseñado para cubrir Sprint 1 (auth/proyectos) sin bloquear los sprints futuros
+// (Gantt, BIM, costos, fotogrametría). Los modelos de sprints futuros ya están
+// definidos aquí para evitar migraciones dolorosas más adelante.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Usuarios y roles ----------
+
+enum RolUsuario {
+  ADMIN
+  JEFE_OBRA
+  ITO
+  OFICINA_TECNICA
+  COLABORADOR
+}
+
+model Usuario {
+  id            String   @id @default(cuid())
+  nombre        String
+  email         String   @unique
+  passwordHash  String
+  rol           RolUsuario @default(COLABORADOR)
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  proyectos     MiembroProyecto[]
+  avancesRegistrados Avance[]
+
+  @@map("usuarios")
+}
+
+// ---------- Proyectos ----------
+
+model Proyecto {
+  id            String   @id @default(cuid())
+  nombre        String
+  descripcion   String?
+  ubicacion     String?
+  fechaInicio   DateTime?
+  fechaTermino  DateTime?
+  presupuesto   Decimal? @db.Decimal(14, 2)
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  miembros      MiembroProyecto[]
+  actividades   Actividad[]
+  modelosBim    ModeloBim[]
+  fotografias   Fotografia[]
+
+  @@map("proyectos")
+}
+
+enum RolProyecto {
+  PROPIETARIO
+  JEFE_OBRA
+  ITO
+  COLABORADOR
+  LECTOR
+}
+
+model MiembroProyecto {
+  id         String      @id @default(cuid())
+  usuario    Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  proyecto   Proyecto    @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  proyectoId String
+  rol        RolProyecto @default(COLABORADOR)
+  creadoEn   DateTime    @default(now())
+
+  @@unique([usuarioId, proyectoId])
+  @@map("miembros_proyecto")
+}
+
+// ---------- Carta Gantt (Sprint 2) ----------
+
+enum EstadoActividad {
+  PENDIENTE
+  EN_CURSO
+  ATRASADA
+  COMPLETADA
+}
+
+model Actividad {
+  id            String   @id @default(cuid())
+  proyecto      Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  proyectoId    String
+
+  nombre        String
+  descripcion   String?
+  fechaInicio   DateTime
+  fechaTermino  DateTime
+  duracionDias  Int?
+  estado        EstadoActividad @default(PENDIENTE)
+
+  avanceFisico    Float   @default(0) // 0 a 100
+  presupuesto     Decimal? @db.Decimal(14, 2)
+  costoReal       Decimal? @db.Decimal(14, 2)
+  esCritica       Boolean @default(false)
+
+  // Auto-relación para dependencias tipo Finish-to-Start (Sprint 2)
+  predecesoras  DependenciaActividad[] @relation("Sucesora")
+  sucesoras     DependenciaActividad[] @relation("Predecesora")
+
+  avances       Avance[]
+  elementosBim  ActividadElementoBim[]
+
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@map("actividades")
+}
+
+model DependenciaActividad {
+  id               String    @id @default(cuid())
+  predecesora      Actividad @relation("Predecesora", fields: [predecesoraId], references: [id], onDelete: Cascade)
+  predecesoraId    String
+  sucesora         Actividad @relation("Sucesora", fields: [sucesoraId], references: [id], onDelete: Cascade)
+  sucesoraId       String
+  tipo             String    @default("FS") // FS, SS, FF, SF
+
+  @@unique([predecesoraId, sucesoraId])
+  @@map("dependencias_actividad")
+}
+
+model Avance {
+  id           String    @id @default(cuid())
+  actividad    Actividad @relation(fields: [actividadId], references: [id], onDelete: Cascade)
+  actividadId  String
+  registradoPor Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId    String
+  porcentaje   Float
+  comentario   String?
+  fecha        DateTime  @default(now())
+
+  @@map("avances")
+}
+
+// ---------- Modelo BIM (Sprint 3 y 4) ----------
+
+model ModeloBim {
+  id           String   @id @default(cuid())
+  proyecto     Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  proyectoId   String
+  nombre       String
+  archivoUrl   String   // ruta/URL del .glb (IFC a futuro)
+  formato      String   @default("glb")
+  subidoEn     DateTime @default(now())
+
+  elementos    ElementoBim[]
+
+  @@map("modelos_bim")
+}
+
+model ElementoBim {
+  id            String   @id @default(cuid())
+  modelo        ModeloBim @relation(fields: [modeloId], references: [id], onDelete: Cascade)
+  modeloId      String
+  meshName      String   // nombre del mesh dentro del GLB
+  nombreVisible String?
+  categoria     String?  // ej: Losa, Muro, Panel FV
+
+  actividades   ActividadElementoBim[]
+
+  @@unique([modeloId, meshName])
+  @@map("elementos_bim")
+}
+
+// Tabla puente: relación N:N entre actividades del Gantt y elementos del modelo BIM
+model ActividadElementoBim {
+  id           String      @id @default(cuid())
+  actividad    Actividad   @relation(fields: [actividadId], references: [id], onDelete: Cascade)
+  actividadId  String
+  elemento     ElementoBim @relation(fields: [elementoId], references: [id], onDelete: Cascade)
+  elementoId   String
+
+  @@unique([actividadId, elementoId])
+  @@map("actividad_elemento_bim")
+}
+
+// ---------- Fotografías (Sprint 3 y 7) ----------
+
+model Fotografia {
+  id          String   @id @default(cuid())
+  proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  proyectoId  String
+  url         String
+  descripcion String?
+  latitud     Float?
+  longitud    Float?
+  tomadaEn    DateTime @default(now())
+
+  @@map("fotografias")
+}
