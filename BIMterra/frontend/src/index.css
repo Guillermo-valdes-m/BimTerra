@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans text-tinta antialiased;
+  }
+  h1, h2, h3 {
+    font-family: theme("fontFamily.display");
+  }
+}
+
+@layer components {
+  /* Etiqueta estilo "cota" de plano técnico, usada como firma visual de la marca */
+  .cota-label {
+    @apply inline-flex items-center gap-1.5 font-display text-[11px] uppercase tracking-[0.18em] text-obra;
+  }
+  .cota-label::before {
+    content: "";
+    @apply block h-px w-4 bg-obra;
+  }
+
+  .panel {
+    @apply rounded-md border border-blueprint-600/40 bg-blueprint-900/60 backdrop-blur-sm;
+  }
+
+  .btn-primario {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm bg-obra px-4 py-2.5 font-display text-sm font-semibold uppercase tracking-wide text-tinta transition hover:bg-obra-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-obra;
+  }
+
+  .btn-secundario {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm border border-blueprint-400/50 bg-transparent px-4 py-2.5 font-display text-sm font-semibold uppercase tracking-wide text-blueprint-100 transition hover:border-obra hover:text-obra focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-obra;
+  }
+
+  .input-plano {
+    @apply w-full rounded-sm border border-blueprint-500/50 bg-blueprint-950/50 px-3 py-2.5 text-sm text-blueprint-100 placeholder:text-blueprint-400 focus:border-obra focus:outline-none focus:ring-1 focus:ring-obra;
+  }
+}
